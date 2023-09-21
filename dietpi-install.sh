@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# use defined temporary directory to avoid storing files everywhere around in filesystem
+mkdir -p /tmp/dietpi
+cd /tmp/dietpi
+
 # Variables
 IMAGE_URL=$(whiptail --inputbox 'Enter the URL for the DietPi image (default: https://dietpi.com/downloads/images/DietPi_Proxmox-x86_64-Bullseye.7z):' 8 78 'https://dietpi.com/downloads/images/DietPi_Proxmox-x86_64-Bullseye.7z' --title 'DietPi Installation' 3>&1 1>&2 2>&3)
 RAM=$(whiptail --inputbox 'Enter the amount of RAM (in MB) for the new virtual machine (default: 2048):' 8 78 2048 --title 'DietPi Installation' 3>&1 1>&2 2>&3)
@@ -13,16 +17,16 @@ ID=$(pvesh get /cluster/nextid)
 
 touch "/etc/pve/qemu-server/$ID.conf"
 
-# get all active storage names into an array
+# put all active storage names into an array
 storage_Names=($(pvesm status | grep active | tr -s ' ' | cut -d ' ' -f1))
 
-# get all active storage types into another array
+# get corresponding storage types into another array
 storage_Types=($(pvesm status | grep active | tr -s ' ' | cut -d ' ' -f2))
 
-# lets find how many names are in our array 
+# lets find how many names are in our array
 storage_Count=${#storage_Names[@]}
 
-# create a new arry for use with whiptail 
+# create a new arry suitable for use with whiptail radiobuttons
 storage_Array=()
 I=1
 for STORAGE in "${storage_Names[@]}"; do
@@ -30,50 +34,60 @@ for STORAGE in "${storage_Names[@]}"; do
   I=$(( I + 1 ))
 done
 
-# lets select a storage name
+# lets choose a storage name by user
 choice=""
 while [ "$choice" == "" ]
 do
   choice=$(whiptail --title "DietPi Installation" --radiolist "Select Storage Pool" 20 50 $storage_Count "${storage_Array[@]}" 3>&1 1>&2 2>&3 )
 done
+choice=$(( choice - 1 ))
 
-# get name of choosen storage
+# get name of choosen storage (element of array)
 STORAGE=${storage_Names[$choice]}
 
-# get type of choosen storage
-Type=${storage_Types[$choice]}
+# get corresponding type of choosen storage
+FSType=${storage_Types[$choice]}
 
-if [ "$Type" = "btrfs" ]; then
+# echo 'Choice: '$choice'<-'
+# echo 'Storage:: '$STORAGE'<-'
+# echo 'FSType: ' $FSType'<-'
+
+# prepare disk-parm depending on storage type
+if [ "$FSType" = "btrfs" ]; then
    qm_disk_param="$STORAGE:$ID/vm-$ID-disk-0.raw"
-elif [ "$Type" = "dir" ]; then
+elif [ "$FSType" = "dir" ]; then
    qm_disk_param="$STORAGE:$ID/vm-$ID-disk-0.raw"
-elif [ "$Type" = "zfspool" ]; then
-   qm_disk_param="$STORAGE:$ID/vm-$ID-disk-0.raw"
+elif [ "$FSType" = "zfspool" ]; then
+   qm_disk_param="$STORAGE:vm-$ID-disk-0"
 else
    qm_disk_param="$STORAGE/vm-$ID-disk-0"
 fi
 
-# Download DietPi image
-wget "$IMAGE_URL"
+# echo 'QM Disk Parm: '$qm_disk_parm
 
-# Extract the image
-IMAGE_NAME=${IMAGE_URL##*/}
-IMAGE_NAME=${IMAGE_NAME%.7z}
-7zr e "$IMAGE_NAME.7z" "$IMAGE_NAME.qcow2"
-sleep 3
+# Download image, only if not found, or changeed on server
+wget -N "$IMAGE_URL"
 
-# import the qcow2 file to the default virtual machine storage
+# Extract the image, if not yet done
+if [ ! -f "$IMAGE_NAME.qcow2" ]; then
+   IMAGE_NAME=${IMAGE_URL##*/}
+   IMAGE_NAME=${IMAGE_NAME%.7z}
+   7zr e "$IMAGE_NAME.7z" "$IMAGE_NAME.qcow2"
+   sleep 3
+fi
+
+# import the qcow2 file to choosen virtual machine storage
 qm importdisk "$ID" "$IMAGE_NAME.qcow2" "$STORAGE"
 
-# Set vm settings
+# modify vm settings
+qm set "$ID" --name 'dietpi' >/dev/null
+qm set "$ID" --description '### [DietPi Website](https://dietpi.com/)'
 qm set "$ID" --cores "$CORES"
 qm set "$ID" --memory "$RAM"
 qm set "$ID" --net0 'virtio,bridge=vmbr0'
+qm set "$ID" --scsihw virtio-scsi-pci
 qm set "$ID" --scsi0 "$qm_disk_param"
 qm set "$ID" --boot order='scsi0'
-qm set "$ID" --scsihw virtio-scsi-pci
-qm set "$ID" --name 'dietpi' >/dev/null
-qm set "$ID" --description '### [DietPi Website](https://dietpi.com/)
 ### [DietPi Docs](https://dietpi.com/docs/)  
 ### [DietPi Forum](https://dietpi.com/forum/)
 ### [DietPi Blog](https://dietpi.com/blog/)' >/dev/null
