@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# use defined temporary directory to avoid storing files everywhere around in filesystem
+# use defined temporary directory to avoid storing files everywhen in filesystem
 mkdir -p /tmp/proxmox-dietpi-installer
 cd /tmp/proxmox-dietpi-installer
 
@@ -48,11 +48,11 @@ STORAGE=${storage_Names[$choice]}
 # get corresponding type of choosen storage
 FSType=${storage_Types[$choice]}
 
-# echo 'Choice: '$choice'<-'
+# echo 'Choice: ' $choice'<-'
 # echo 'Storage:: '$STORAGE'<-'
 # echo 'FSType: ' $FSType'<-'
 
-# prepare disk-parm depending on storage type
+# prepare disk-parm  depending on storage type
 if [ "$FSType" = "btrfs" ]; then
    qm_disk_param="$STORAGE:$ID/vm-$ID-disk-0.raw"
 elif [ "$FSType" = "dir" ]; then
@@ -65,13 +65,15 @@ fi
 
 # echo 'QM Disk Parm: '$qm_disk_parm
 
+
 # Download image, only if not found, or changeed on server
 wget -N "$IMAGE_URL"
 
+# strip image name
+IMAGE_NAME=${IMAGE_URL##*/}
+IMAGE_NAME=${IMAGE_NAME%.7z}
 # Extract the image, if not yet done
 if [ ! -f "$IMAGE_NAME.qcow2" ]; then
-   IMAGE_NAME=${IMAGE_URL##*/}
-   IMAGE_NAME=${IMAGE_NAME%.7z}
    7zr e "$IMAGE_NAME.7z" "$IMAGE_NAME.qcow2"
    sleep 3
 fi
@@ -84,8 +86,8 @@ qm set "$ID" --name 'dietpi' >/dev/null
 qm set "$ID" --description '### [DietPi Website](https://dietpi.com/)'
 qm set "$ID" --cores "$CORES"
 qm set "$ID" --memory "$RAM"
-qm set "$ID" --net0 'virtio,bridge=vmbr0'
-qm set "$ID" --scsihw virtio-scsi-pci
+qm set "$ID" --net0 "virtio,bridge=vmbr0"
+qm set "$ID" --scsihw "virtio-scsi-pci"
 qm set "$ID" --scsi0 "$qm_disk_param"
 qm set "$ID" --boot order='scsi0'
 ### [DietPi Docs](https://dietpi.com/docs/)  
