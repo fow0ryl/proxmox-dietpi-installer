@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # use defined temporary directory to avoid storing files everywhere around in filesystem
-mkdir -p /tmp/dietpi
-cd /tmp/dietpi
+mkdir -p /tmp/proxmox-dietpi-installer
+cd /tmp/proxmox-dietpi-installer
 
 # Variables
 IMAGE_URL=$(whiptail --inputbox 'Enter the URL for the DietPi image (default: https://dietpi.com/downloads/images/DietPi_Proxmox-x86_64-Bullseye.7z):' 8 78 'https://dietpi.com/downloads/images/DietPi_Proxmox-x86_64-Bullseye.7z' --title 'DietPi Installation' 3>&1 1>&2 2>&3)
